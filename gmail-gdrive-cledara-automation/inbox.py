@@ -78,24 +78,23 @@ def _prompt_vendor() -> str:
         print("  Invalid choice.")
 
 
-def _resolve_path(output_dir: Path, vendor_name: str, date_str: str) -> Path:
-    """Build output path with collision handling."""
-    vendor_dir = output_dir / vendor_name
+def _resolve_path(inbox_dir: Path, vendor_name: str, date_str: str) -> Path:
+    """Build renamed path within inbox/ with collision handling."""
     base_name = f"{date_str}-{vendor_name}-Invoice.pdf"
-    path = vendor_dir / base_name
+    path = inbox_dir / base_name
     if not path.exists():
         return path
     counter = 2
     while True:
         base_name = f"{date_str}-{vendor_name}-Invoice-{counter}.pdf"
-        path = vendor_dir / base_name
+        path = inbox_dir / base_name
         if not path.exists():
             return path
         counter += 1
 
 
-def process_inbox(output_dir: Path, dry_run: bool = False) -> dict:
-    """Process PDFs from the inbox/ folder. Returns summary dict."""
+def process_inbox(dry_run: bool = False) -> dict:
+    """Process PDFs from the inbox/ folder. Renames in place. Returns summary dict."""
     inbox = Path("inbox")
     results = {"processed": [], "skipped": [], "errors": []}
 
@@ -104,48 +103,61 @@ def process_inbox(output_dir: Path, dry_run: bool = False) -> dict:
         print("Created inbox/ folder. Drop PDFs there and re-run.")
         return results
 
-    pdfs = sorted(inbox.glob("*.pdf"))
+    # Collect PDFs from inbox root and any subfolders
+    pdfs = sorted(inbox.rglob("*.pdf"))
     if not pdfs:
         print("No PDFs found in inbox/.")
         return results
 
     for pdf_path in pdfs:
         filename = pdf_path.stem
-        print(f"\nProcessing: {pdf_path.name}")
+        # Use parent folder name as extra context for matching (e.g. inbox/stripe/*.pdf)
+        parent_name = pdf_path.parent.name if pdf_path.parent != inbox else ""
+
+        # Skip files already renamed by a previous run
+        if re.match(r"\d{4}-\d{2}-\d{2}-.+-Invoice", filename):
+            results["skipped"].append((pdf_path.name, "Already renamed"))
+            continue
+
+        rel_path = pdf_path.relative_to(inbox)
+        print(f"\nProcessing: {rel_path}")
 
         # Check if it's a valid PDF (basic size check)
         if pdf_path.stat().st_size < 100:
-            results["errors"].append((pdf_path.name, "File too small / corrupt"))
+            results["errors"].append((str(rel_path), "File too small / corrupt"))
             continue
 
-        # Match vendor
+        # Match vendor — try filename first, then parent folder name
         vendor = _fuzzy_match_vendor(filename)
+        if not vendor and parent_name:
+            vendor = _fuzzy_match_vendor(parent_name)
         if vendor:
             vendor_name = vendor.name
             print(f"  Matched vendor: {vendor_name}")
         else:
-            print(f"  Could not match vendor from filename: {pdf_path.name}")
+            print(f"  Could not match vendor from filename: {rel_path}")
             vendor_name = _prompt_vendor()
 
-        # Parse date
+        # Parse date — try filename first, then parent folder name
         date_str = _parse_date_from_filename(filename)
+        if not date_str and parent_name:
+            date_str = _parse_date_from_filename(parent_name)
         if date_str:
             print(f"  Parsed date: {date_str}")
         else:
-            print(f"  Could not parse date from filename: {pdf_path.name}")
+            print(f"  Could not parse date from filename: {rel_path}")
             date_str = _prompt_date()
 
-        # Resolve output path
-        out_path = _resolve_path(output_dir, vendor_name, date_str)
+        # Resolve output path (renamed in inbox/ root)
+        out_path = _resolve_path(inbox, vendor_name, date_str)
 
         if dry_run:
-            print(f"  Would move to: {out_path}")
+            print(f"  Would rename to: {out_path.name}")
             results["processed"].append((out_path.name, vendor_name))
             continue
 
-        out_path.parent.mkdir(parents=True, exist_ok=True)
         pdf_path.rename(out_path)
         results["processed"].append((out_path.name, vendor_name))
-        print(f"  Moved to: {out_path}")
+        print(f"  Renamed to: {out_path.name}")
 
     return results

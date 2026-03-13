@@ -51,14 +51,13 @@ def main():
                         help="Preview changes without writing files")
     args = parser.parse_args()
 
-    output_dir = Path(OUTPUT_DIR).expanduser()
-
     if args.mode == "gmail":
         from gmail import process_gmail
+        output_dir = Path(OUTPUT_DIR).expanduser()
         results = process_gmail(output_dir, dry_run=args.dry_run)
     else:
         from inbox import process_inbox
-        results = process_inbox(output_dir, dry_run=args.dry_run)
+        results = process_inbox(dry_run=args.dry_run)
 
     print_summary(results, args.mode, args.dry_run)
 
