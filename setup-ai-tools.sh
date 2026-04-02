@@ -65,6 +65,14 @@ if [[ "$AUTO_APPROVE" != true ]]; then
   fi
 fi
 
+# ──────────────────────────────────────────────
+# Pre-flight: request sudo upfront
+# ──────────────────────────────────────────────
+info "Some installations require administrator privileges."
+sudo -v || fail "sudo is required to run this script."
+# Keep sudo alive for the duration of the script
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
 echo ""
 
 # ──────────────────────────────────────────────
@@ -72,6 +80,12 @@ echo ""
 # ──────────────────────────────────────────────
 if command -v brew &>/dev/null; then
   success "Homebrew is already installed"
+  # Ensure brew is on PATH for subprocesses
+  if [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -f /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
 else
   info "Installing Homebrew..."
   NONINTERACTIVE=1 /bin/bash -c "$(curl --connect-timeout 10 --max-time 120 -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -133,6 +147,13 @@ fi
 # ──────────────────────────────────────────────
 # 6. Cursor
 # ──────────────────────────────────────────────
+# Ensure homebrew/cask is tapped so `brew install --cask` works
+if ! brew tap | grep -q "^homebrew/cask$" 2>/dev/null; then
+  info "Tapping homebrew/cask..."
+  brew tap homebrew/cask
+  success "homebrew/cask tapped"
+fi
+
 if [[ -d "/Applications/Cursor.app" ]] || command -v cursor &>/dev/null; then
   success "Cursor is already installed"
 else
