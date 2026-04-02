@@ -118,6 +118,7 @@ if command -v bun &>/dev/null; then
   success "Bun is already installed ($(bun --version))"
 else
   info "Installing Bun..."
+  brew tap oven-sh/bun
   brew install bun
   success "Bun installed ($(bun --version))"
 fi
@@ -147,12 +148,7 @@ fi
 # ──────────────────────────────────────────────
 # 6. Cursor
 # ──────────────────────────────────────────────
-# Ensure homebrew/cask is tapped so `brew install --cask` works
-if ! brew tap | grep -q "^homebrew/cask$" 2>/dev/null; then
-  info "Tapping homebrew/cask..."
-  brew tap homebrew/cask
-  success "homebrew/cask tapped"
-fi
+
 
 if [[ -d "/Applications/Cursor.app" ]] || command -v cursor &>/dev/null; then
   success "Cursor is already installed"
